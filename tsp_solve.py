@@ -54,18 +54,26 @@ def random_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 
 def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
+    cut_tree = CutTree(len(edges))
+
     return []
 
 
 def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
+    cut_tree = CutTree(len(edges))
+
     return []
 
 
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
+    cut_tree = CutTree(len(edges))
+
     # set the diagonal to inf before reducing matrices
     for i in range(len(edges)): edges[i][i] = inf  
     return []
 
 
 def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
+    cut_tree = CutTree(len(edges))
+
     return []
