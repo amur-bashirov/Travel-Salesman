@@ -93,31 +93,27 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
         smallest = float('inf')
         smallest_index = 0
-        stop = True
         finished = False
+        index = -1
         if len(tour) != len(edges)-1:
             for edge in outgoing_edges:
-                index = outgoing_edges.index(edge)
-                if not math.isinf(edge) and index not in tour and edge != 0 and index != initial_city:
+                index += 1
+                if  index not in tour and edge != 0 and index != initial_city:
                     stop = False
-                    if edge < smallest:
+                    if edge <= smallest:
                         smallest = edge
                         smallest_index = index
         else:
             finished = True
             first = outgoing_edges[initial_city]
-            if not math.isinf(first) and first != 0:
-                smallest_index = initial_city
-                stop = False
-            else:
-                stop = True
+            smallest_index = initial_city
 
 
 
 
         next_city = smallest_index
         tour.add(smallest_index)
-        return next_city, stop, tour, finished
+        return next_city, tour, finished
 
 
     while cities:
@@ -129,40 +125,50 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
         set_tour = set()
         tour = [initial_city]
         current_city = initial_city
-        stop = True
         while True:
 
             if timer.time_out():
                 return stats
 
-            next_city, stop, set_tour, finished  = set_next(current_city, edges, set_tour, initial_city)
-            tour.append(next_city)
-            if stop:  break
-            print(f"From {current_city} to next city: {next_city}")
-            current_city = next_city
-            n_nodes_expanded += 1
-
+            next_city, set_tour, finished  = set_next(current_city, edges, set_tour, initial_city)
 
 
             if finished:
 
                 cost = score_tour(tour, edges)
-                stats.append(SolutionStats(
-                    tour=tour,
-                    score=cost,
-                    time=timer.time(),
-                    max_queue_size=1,
-                    n_nodes_expanded=n_nodes_expanded,
-                    n_nodes_pruned=n_nodes_pruned,
-                    n_leaves_covered=cut_tree.n_leaves_cut(),
-                    fraction_leaves_covered=cut_tree.fraction_leaves_covered()
-                ))
-                stop = True
+                print(f"Score: {cost}, Tour: {tour}")
+                if not math.isinf(cost):
+                    if not stats:
+                        stats.append(SolutionStats(
+                            tour=tour,
+                            score=cost,
+                            time=timer.time(),
+                            max_queue_size=1,
+                            n_nodes_expanded=n_nodes_expanded,
+                            n_nodes_pruned=n_nodes_pruned,
+                            n_leaves_covered=cut_tree.n_leaves_cut(),
+                            fraction_leaves_covered=cut_tree.fraction_leaves_covered()
+                        ))
+                    elif stats[-1].score > cost:
+                        stats.append(SolutionStats(
+                            tour=tour,
+                            score=cost,
+                            time=timer.time(),
+                            max_queue_size=1,
+                            n_nodes_expanded=n_nodes_expanded,
+                            n_nodes_pruned=n_nodes_pruned,
+                            n_leaves_covered=cut_tree.n_leaves_cut(),
+                            fraction_leaves_covered=cut_tree.fraction_leaves_covered()
+                        ))
                 break
 
-        if stop:
-            stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges, stats)
-            continue
+            tour.append(next_city)
+            print(f"From {current_city} to next city: {next_city}")
+            current_city = next_city
+            n_nodes_expanded += 1
+
+        stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges, stats)
+        continue
 
     if not stats:
         result = empty_stats(timer)
@@ -209,6 +215,7 @@ def main():
 
     # Run the greedy algorithm
     stats = greedy_tour(graph, timer)
+    print(f"Stats: {stats}")
 
 
 

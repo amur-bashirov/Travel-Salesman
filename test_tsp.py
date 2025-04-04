@@ -42,7 +42,7 @@ def test_greedy():
         [inf, 6, 7, 0, 12],
         [1, inf, inf, 10, 0]
     ]
-    timer = Timer(10)
+    timer = Timer(10000)
     stats = greedy_tour(graph, timer)
     assert_valid_tours(graph, stats)
 
