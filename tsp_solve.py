@@ -187,7 +187,9 @@ def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
-    cut_tree = CutTree(len(edges))
+    stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
+
+
 
     # set the diagonal to inf before reducing matrices
     for i in range(len(edges)): edges[i][i] = inf  
