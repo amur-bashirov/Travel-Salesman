@@ -7,6 +7,8 @@ from tsp_core import Tour, SolutionStats, Timer, score_tour, Solver
 from tsp_cuttree import CutTree
 from math import inf
 
+from branch_and_bound import reduction, choosing_edge
+
 def random_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats = []
     n_nodes_expanded = 0
@@ -189,10 +191,55 @@ def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
 
-
-
     # set the diagonal to inf before reducing matrices
-    for i in range(len(edges)): edges[i][i] = inf  
+    for i in range(len(edges)): edges[i][i] = inf
+
+    reducted_graph, initial_lb = reduction(edges)
+
+    tour = [0]
+    chose_branch = 0
+    while True:
+        if timer.time_out():
+            return stats
+
+        lower_bound, chose_branch, reducted_graph = choosing_edge(reducted_graph, initial_lb, chose_branch)
+
+        # do I compare lower_bound with stats[-1].score?
+
+        tour.append(chose_branch)
+        n_nodes_expanded += 1
+
+        if len(tour) == len(edges):
+            cost = score_tour(tour, edges)
+            print(f"Score: {cost}, Tour: {tour}")
+            if not math.isinf(cost):
+                if not stats:
+                    stats.append(SolutionStats(
+                        tour=tour,
+                        score=cost,
+                        time=timer.time(),
+                        max_queue_size=1,
+                        n_nodes_expanded=n_nodes_expanded,
+                        n_nodes_pruned=n_nodes_pruned,
+                        n_leaves_covered=cut_tree.n_leaves_cut(),
+                        fraction_leaves_covered=cut_tree.fraction_leaves_covered()
+                    ))
+                # elif stats[-1].score > cost:, I am not base on what to choose it, do I need just on BSSF or keep track of stats?
+                    stats.append(SolutionStats(
+                        tour=tour,
+                        score=cost,
+                        time=timer.time(),
+                        max_queue_size=1,
+                        n_nodes_expanded=n_nodes_expanded,
+                        n_nodes_pruned=n_nodes_pruned,
+                        n_leaves_covered=cut_tree.n_leaves_cut(),
+                        fraction_leaves_covered=cut_tree.fraction_leaves_covered()
+                    ))
+            break
+
+
+
+
     return []
 
 
@@ -203,7 +250,7 @@ def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[Solut
 
 
 def main():
-    # Example graph represented as an adjacency matrix
+
     graph = [
         [0, 9, inf, 8, inf],
         [inf, 0, 4, inf, 2],
@@ -212,10 +259,10 @@ def main():
         [1, inf, inf, 10, 0]
     ]
 
-    # Initialize the timer with a 10-second limit
+
     timer = Timer(10000)
 
-    # Run the greedy algorithm
+
     stats = greedy_tour(graph, timer)
     print(f"Stats: {stats}")
 
