@@ -7,7 +7,7 @@ from tsp_core import Tour, SolutionStats, Timer, score_tour, Solver
 from tsp_cuttree import CutTree
 from math import inf
 
-from branch_and_bound import reduction, choosing_edge
+from branch_and_bound import reduction
 
 def random_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats = []
@@ -84,6 +84,40 @@ def initial_variables(edges, stats=[]):
     return stats, n_nodes_expanded, n_nodes_pruned, cut_tree
 
 
+def add_stats(stats,timer, n_nodes_expanded,
+              n_nodes_pruned, cut_tree, string, tour,edges, bssf_cost=0):
+
+
+    cost = score_tour(tour, edges)
+    solution_stats = SolutionStats(
+        tour=tour,
+        score=cost,
+        time=timer.time(),
+        max_queue_size=1,
+        n_nodes_expanded=n_nodes_expanded,
+        n_nodes_pruned=n_nodes_pruned,
+        n_leaves_covered=cut_tree.n_leaves_cut(),
+        fraction_leaves_covered=cut_tree.fraction_leaves_covered()
+    )
+
+
+    if string == "greedy":
+        cost = score_tour(tour, edges)
+        print(f"Score: {cost}, Tour: {tour}")
+        if not math.isinf(cost):
+            if not stats:
+                stats.append(solution_stats)
+            elif stats[-1].score > cost:
+                stats.append(solution_stats)
+        return stats
+    elif string == "branch and bound":
+        if cost < bssf_cost:
+            bssf_cost = cost
+            stats.append(solution_stats)
+        return stats, bssf_cost
+
+
+
 def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
 
@@ -136,32 +170,8 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 
             if finished:
-
-                cost = score_tour(tour, edges)
-                print(f"Score: {cost}, Tour: {tour}")
-                if not math.isinf(cost):
-                    if not stats:
-                        stats.append(SolutionStats(
-                            tour=tour,
-                            score=cost,
-                            time=timer.time(),
-                            max_queue_size=1,
-                            n_nodes_expanded=n_nodes_expanded,
-                            n_nodes_pruned=n_nodes_pruned,
-                            n_leaves_covered=cut_tree.n_leaves_cut(),
-                            fraction_leaves_covered=cut_tree.fraction_leaves_covered()
-                        ))
-                    elif stats[-1].score > cost:
-                        stats.append(SolutionStats(
-                            tour=tour,
-                            score=cost,
-                            time=timer.time(),
-                            max_queue_size=1,
-                            n_nodes_expanded=n_nodes_expanded,
-                            n_nodes_pruned=n_nodes_pruned,
-                            n_leaves_covered=cut_tree.n_leaves_cut(),
-                            fraction_leaves_covered=cut_tree.fraction_leaves_covered()
-                        ))
+                stats = add_stats(stats, timer, n_nodes_expanded,
+                                  n_nodes_pruned, cut_tree, "greedy", tour, edges)
                 break
 
             tour.append(next_city)
@@ -190,80 +200,91 @@ def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
+    # 1) get an initial BSSF from greedy
+    new_timer = Timer(20)
+    stat = greedy_tour(edges, new_timer)
+    bssf_cost = stat[-1].score
+    stats.append(stat[-1])
 
     # set the diagonal to inf before reducing matrices
     for i in range(len(edges)): edges[i][i] = inf
 
-    reducted_graph, initial_lb = reduction(edges)
+    initial_graph, initial_lb = reduction(edges)
 
-    tour = [0]
-    chose_branch = 0
-    while True:
-        if timer.time_out():
-            return stats
 
-        lower_bound, chose_branch, reducted_graph = choosing_edge(reducted_graph, initial_lb, chose_branch)
+    straight_tour = []
+    for i in range(len(edges)): straight_tour.append(i)
+    stack = [([0], initial_graph, initial_lb, straight_tour)]
 
-        # do I compare lower_bound with stats[-1].score?
+    # 3) main loop
+    while stack and not timer.time_out():
 
-        tour.append(chose_branch)
+        path, reduced_graph, lb, straight_tour = stack.pop()
         n_nodes_expanded += 1
+        straight_tour.remove(path[-1])
 
-        if len(tour) == len(edges):
-            cost = score_tour(tour, edges)
-            print(f"Score: {cost}, Tour: {tour}")
-            if not math.isinf(cost):
-                if not stats:
-                    stats.append(SolutionStats(
-                        tour=tour,
-                        score=cost,
-                        time=timer.time(),
-                        max_queue_size=1,
-                        n_nodes_expanded=n_nodes_expanded,
-                        n_nodes_pruned=n_nodes_pruned,
-                        n_leaves_covered=cut_tree.n_leaves_cut(),
-                        fraction_leaves_covered=cut_tree.fraction_leaves_covered()
-                    ))
-                # elif stats[-1].score > cost:, I am not base on what to choose it, do I need just on BSSF or keep track of stats?
-                    stats.append(SolutionStats(
-                        tour=tour,
-                        score=cost,
-                        time=timer.time(),
-                        max_queue_size=1,
-                        n_nodes_expanded=n_nodes_expanded,
-                        n_nodes_pruned=n_nodes_pruned,
-                        n_leaves_covered=cut_tree.n_leaves_cut(),
-                        fraction_leaves_covered=cut_tree.fraction_leaves_covered()
-                    ))
-            break
+        if lb >= bssf_cost:
+            n_nodes_pruned += 1
+            cut_tree.cut(path)
+            continue
+
+        # B) if it’s a full tour, update BSSF & stats
+        if len(path) == len(edges):
+            stats, bssf_cost = add_stats(stats, timer, n_nodes_expanded,
+                n_nodes_pruned, cut_tree, "branch and bound", path, edges, bssf_cost)
+            continue
+
+        # C) otherwise, branch on every possible next city
+        last = path[-1]
+        for nxt in straight_tour:
 
 
+            # make a copy of R, ban row/col, reduce
+            new_graph = copy.deepcopy(reduced_graph)
+            # ban outgoing from `last`, incoming to `nxt`, and the reverse edge
+            move_cost = new_graph[last][nxt]
+            for j in range(len(edges)):      new_graph[last][j] = inf
+            for i in range(len(edges)):      new_graph[i][nxt] = inf
+            new_graph[nxt][last] = inf  # avoid subtours
+
+            new_graph, extra_lb = reduction(new_graph)
+            new_lb = lb + extra_lb + move_cost
 
 
-    return []
+            if new_lb < bssf_cost:
+                stack.append((path + [nxt], new_graph, new_lb))
+            else:
+                n_nodes_pruned += 1
+                cut_tree.cut(path + [nxt])
+
+
+
+
+
+    if not stats:
+        result = empty_stats(timer)
+        return result
+    return stats
 
 
 def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
-    cut_tree = CutTree(len(edges))
+    stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
 
     return []
 
 
 def main():
-
     graph = [
-        [0, 9, inf, 8, inf],
-        [inf, 0, 4, inf, 2],
-        [inf, 3, 0, 4, inf],
-        [inf, 6, 7, 0, 12],
-        [1, inf, inf, 10, 0]
+        [0, 1, 7, 4],
+        [1, 0, 4, 2],
+        [7, 4, 0, 1],
+        [4, 2, 1, 0]
     ]
-
 
     timer = Timer(10000)
 
 
-    stats = greedy_tour(graph, timer)
+    stats = branch_and_bound(graph, timer)
     print(f"Stats: {stats}")
 
 
