@@ -200,52 +200,51 @@ def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
-    # 1) get an initial BSSF from greedy
+    max_queue_size = 1
+
     new_timer = Timer(20)
     stat = greedy_tour(edges, new_timer)
-    bssf_cost = stat[-1].score
-    stats.append(stat[-1])
+    if not stat:
+        bssf_cost = inf
+    else:
+        bssf_cost = stat[-1].score
+        stats.append(stat[-1])
 
-    # set the diagonal to inf before reducing matrices
     for i in range(len(edges)): edges[i][i] = inf
-
     initial_graph, initial_lb = reduction(edges)
 
+    stack = [([0], initial_graph, initial_lb)]
 
-    straight_tour = []
-    for i in range(len(edges)): straight_tour.append(i)
-    stack = [([0], initial_graph, initial_lb, straight_tour)]
 
-    # 3) main loop
     while stack and not timer.time_out():
 
-        path, reduced_graph, lb, straight_tour = stack.pop()
+        path, reduced_graph, lb = stack.pop()
         n_nodes_expanded += 1
-        straight_tour.remove(path[-1])
+
 
         if lb >= bssf_cost:
             n_nodes_pruned += 1
             cut_tree.cut(path)
             continue
 
-        # B) if it’s a full tour, update BSSF & stats
+
         if len(path) == len(edges):
             stats, bssf_cost = add_stats(stats, timer, n_nodes_expanded,
                 n_nodes_pruned, cut_tree, "branch and bound", path, edges, bssf_cost)
             continue
 
-        # C) otherwise, branch on every possible next city
+
         last = path[-1]
-        for nxt in straight_tour:
+        remaining = [i for i in range(len(edges)) if i not in path]
+        for nxt in remaining:
 
 
-            # make a copy of R, ban row/col, reduce
             new_graph = copy.deepcopy(reduced_graph)
-            # ban outgoing from `last`, incoming to `nxt`, and the reverse edge
+
             move_cost = new_graph[last][nxt]
             for j in range(len(edges)):      new_graph[last][j] = inf
             for i in range(len(edges)):      new_graph[i][nxt] = inf
-            new_graph[nxt][last] = inf  # avoid subtours
+            new_graph[nxt][last] = inf
 
             new_graph, extra_lb = reduction(new_graph)
             new_lb = lb + extra_lb + move_cost
@@ -253,11 +252,10 @@ def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionSta
 
             if new_lb < bssf_cost:
                 stack.append((path + [nxt], new_graph, new_lb))
+                max_queue_size = max(max_queue_size, len(stack))
             else:
                 n_nodes_pruned += 1
                 cut_tree.cut(path + [nxt])
-
-
 
 
 
@@ -265,6 +263,8 @@ def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionSta
         result = empty_stats(timer)
         return result
     return stats
+
+
 
 
 def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
@@ -275,10 +275,10 @@ def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[Solut
 
 def main():
     graph = [
-        [0, 1, 7, 4],
-        [1, 0, 4, 2],
-        [7, 4, 0, 1],
-        [4, 2, 1, 0]
+        [0, 2, 3, 5],
+        [2, 0, 2, 3],
+        [3, 2, 0, 4],
+        [5, 4, 3, 0]
     ]
 
     timer = Timer(10000)
