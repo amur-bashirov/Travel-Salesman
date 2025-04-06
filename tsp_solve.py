@@ -110,11 +110,12 @@ def add_stats(stats,timer, n_nodes_expanded,
             elif stats[-1].score > cost:
                 stats.append(solution_stats)
         return stats
-    elif string == "branch and bound":
+    elif string == "branch and bound" or string == "dfs":
         if cost < bssf_cost:
             bssf_cost = cost
             stats.append(solution_stats)
         return stats, bssf_cost
+
 
 
 
@@ -194,8 +195,27 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
+    bssf_cost = inf
+    stack = [[0]]
+    while stack and not timer.time_out():
+        path = stack.pop()
+        outgoing_edges = [i for i in range(len(edges)) if i not in path]
+        for city in outgoing_edges:
+            new_path = path + [city]
 
-    return []
+            if len(new_path) == len(edges):
+                stats, bssf_cost = add_stats(stats, timer, n_nodes_expanded,
+                                  n_nodes_pruned, cut_tree, "dfs", new_path, edges, bssf_cost)
+                continue
+
+            stack.append(new_path)
+            n_nodes_expanded += 1
+
+
+    if not stats:
+        result = empty_stats(timer)
+        return result
+    return stats
 
 
 def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
@@ -284,7 +304,7 @@ def main():
     timer = Timer(10000)
 
 
-    stats = branch_and_bound(graph, timer)
+    stats = dfs(graph, timer)
     print(f"Stats: {stats}")
 
 
