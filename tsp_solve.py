@@ -57,10 +57,10 @@ def random_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
             cut_tree.fraction_leaves_covered()
         )]
 
-def empty_stats(timer) -> list[SolutionStats]:
+def empty_stats(timer, edges) -> list[SolutionStats]:
     n_nodes_expanded = 0
     n_nodes_pruned = 0
-    cut_tree = CutTree(0)
+    cut_tree = CutTree(len(edges))
 
     return [SolutionStats(
         [],
@@ -124,7 +124,6 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
 
     cities = deque(range(len(edges)))
-    print(cities)
 
     def set_next(current_city, edges, tour, initial_city):
         outgoing_edges = edges[current_city]
@@ -156,9 +155,7 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
     while cities:
 
-        print()
         initial_city = cities.popleft()  # Efficiently removes the first element
-        print("Processing tour for city:", initial_city)  # Process the current_city
 
         set_tour = set()
         tour = [initial_city]
@@ -177,7 +174,6 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
                 break
 
             tour.append(next_city)
-            print(f"From {current_city} to next city: {next_city}")
             current_city = next_city
             n_nodes_expanded += 1
 
@@ -185,10 +181,10 @@ def greedy_tour(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
         continue
 
     if not stats:
-        result = empty_stats(timer)
+        result = empty_stats(timer, edges)
         return result
 
-    print(len(cities))
+
     return stats
 
 
@@ -214,7 +210,7 @@ def dfs(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
 
 
     if not stats:
-        result = empty_stats(timer)
+        result = empty_stats(timer, edges)
         return result
     return stats
 
@@ -281,7 +277,7 @@ def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionSta
 
 
     if not stats:
-        result = empty_stats(timer)
+        result = empty_stats(timer, edges)
         return result
     return stats
 
@@ -326,28 +322,29 @@ def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[Solut
 
         last = path[-1]
         remaining = [i for i in range(len(edges)) if i not in path]
-        for nxt in remaining:
+        for city in remaining:
 
             new_graph = copy.deepcopy(reduced_graph)
 
-            move_cost = new_graph[last][nxt]
+            move_cost = new_graph[last][city]
             for j in range(len(edges)):      new_graph[last][j] = inf
-            for i in range(len(edges)):      new_graph[i][nxt] = inf
-            new_graph[nxt][last] = inf
+            for i in range(len(edges)):      new_graph[i][city] = inf
+            new_graph[city][last] = inf
 
             new_graph, extra_lb = reduction(new_graph)
             new_lb = lb + extra_lb + move_cost
 
             if new_lb < bssf_cost:
                 score = new_lb - 2 * (len(path)+1)
-                priority_queue.put((score,(path + [nxt], new_graph, new_lb)))
+                priority_queue.put((score,(path + [city], new_graph, new_lb)))
                 max_queue_size = max(max_queue_size, priority_queue.qsize())
             else:
                 n_nodes_pruned += 1
-                cut_tree.cut(path + [nxt])
+                cut_tree.cut(path + [city])
+    print(f"Score is {bssf_cost}")
 
     if not stats:
-        result = empty_stats(timer)
+        result = empty_stats(timer, edges)
         return result
     return stats
 
