@@ -2,6 +2,7 @@ import math
 import random
 from collections import deque
 import copy
+import queue
 
 from tsp_core import Tour, SolutionStats, Timer, score_tour, Solver
 from tsp_cuttree import CutTree
@@ -289,8 +290,66 @@ def branch_and_bound(edges: list[list[float]], timer: Timer) -> list[SolutionSta
 
 def branch_and_bound_smart(edges: list[list[float]], timer: Timer) -> list[SolutionStats]:
     stats, n_nodes_expanded, n_nodes_pruned, cut_tree = initial_variables(edges)
+    max_queue_size = 1
 
-    return []
+    new_timer = Timer(3)
+    stat = greedy_tour(edges, new_timer)
+    if not stat:
+        bssf_cost = inf
+    else:
+        bssf_cost = stat[-1].score
+        stats.append(stat[-1])
+
+    for i in range(len(edges)): edges[i][i] = inf
+    initial_graph, initial_lb = reduction(edges)
+
+    iteration = ([0], initial_graph, initial_lb)
+
+    priority_queue = queue.PriorityQueue()
+    priority_queue.put((1,iteration))
+
+    while not priority_queue.empty() and not timer.time_out():
+
+
+        score, (path, reduced_graph, lb) = priority_queue.get()
+        n_nodes_expanded += 1
+
+        if lb >= bssf_cost:
+            n_nodes_pruned += 1
+            cut_tree.cut(path)
+            continue
+
+        if len(path) == len(edges):
+            stats, bssf_cost = add_stats(stats, timer, n_nodes_expanded,
+                                         n_nodes_pruned, cut_tree, "branch and bound", path, edges, bssf_cost)
+            continue
+
+        last = path[-1]
+        remaining = [i for i in range(len(edges)) if i not in path]
+        for nxt in remaining:
+
+            new_graph = copy.deepcopy(reduced_graph)
+
+            move_cost = new_graph[last][nxt]
+            for j in range(len(edges)):      new_graph[last][j] = inf
+            for i in range(len(edges)):      new_graph[i][nxt] = inf
+            new_graph[nxt][last] = inf
+
+            new_graph, extra_lb = reduction(new_graph)
+            new_lb = lb + extra_lb + move_cost
+
+            if new_lb < bssf_cost:
+                score = new_lb - 2 * (len(path)+1)
+                priority_queue.put((score,(path + [nxt], new_graph, new_lb)))
+                max_queue_size = max(max_queue_size, priority_queue.qsize())
+            else:
+                n_nodes_pruned += 1
+                cut_tree.cut(path + [nxt])
+
+    if not stats:
+        result = empty_stats(timer)
+        return result
+    return stats
 
 
 def main():
@@ -304,7 +363,9 @@ def main():
     timer = Timer(10000)
 
 
-    stats = dfs(graph, timer)
+    stats =  branch_and_bound_smart(graph, timer)
+    if not stats:
+        print("No stats")
     print(f"Stats: {stats}")
 
 
